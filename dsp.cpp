@@ -1,5 +1,9 @@
 #include <iostream>
 #include <cmath>
+#include <csignal>
+#include <atomic>
+#include <thread>
+#include <chrono>
 #include <rtaudio/RtAudio.h>
 
 #define CHANNELS 2
@@ -7,9 +11,9 @@
 
 // Level control
 void levelControl(float *samples, unsigned int nFrames) {
-    const float target = 1e-2f;
-    const float smoothing = 1e-5f;
-    const float maxVolume = 10.0f;
+    const float target = 2e-2f;
+    const float smoothing = 5e-6f;
+    const float maxVolume = 8.0f;
     static float volume = 1.0f;
     static float level = target;
 
@@ -19,7 +23,7 @@ void levelControl(float *samples, unsigned int nFrames) {
         samples[i] *= volume;
     }
 
-    std::cout << volume << "," << level << std::endl;
+    //std::cout << volume << "," << level << std::endl;
 }
 
 int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nFrames, double /*streamTime*/, RtAudioStreamStatus status, void *userData) {
@@ -34,6 +38,11 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nFrames, d
     levelControl(out, nFrames);
 
     return 0;
+}
+
+std::atomic<bool> run(true);
+void signalHandler(int) {
+    run = false;
 }
 
 int main() {
@@ -86,8 +95,11 @@ int main() {
         return 1;
     }
 
-    std::cout << "Streaming audio... Press Enter to quit.\n";
-    std::cin.get();
+    std::cout << "Streaming audio... Press Ctrl-C to quit." << std::endl;
+    while (run) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    std::cout << "Shutting down DSP..." << std::endl;
 
     try {
         audio.stopStream();
