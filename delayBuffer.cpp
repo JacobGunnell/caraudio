@@ -3,6 +3,7 @@
 
 DelayBuffer::DelayBuffer(size_t _bufferSize) : bufferSize(_bufferSize) {
     buffer.reserve(bufferSize);
+    idx = 0;
 }
 
 void DelayBuffer::delay(float *out, float *in, unsigned int nFrames) {
