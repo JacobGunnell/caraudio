@@ -33,7 +33,7 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nFrames, d
     float *out = static_cast<float *>(outputBuffer);
     float *in = static_cast<float *>(inputBuffer);
 
-    static DelayBuffer delayBuffer(BUFFER_FRAMES*172); // 1 second lookahead window
+    static DelayBuffer delayBuffer(SAMPLE_HZ, CHUNK_FRAMES, 1.0); // 1 second lookahead window
     delayBuffer.delay(out, in, nFrames);
 
     // DSP chain
@@ -83,12 +83,12 @@ int main() {
     outParams.nChannels = CHANNELS;
 
     unsigned int sampleRate = SAMPLE_HZ;
-    unsigned int bufferFrames = BUFFER_FRAMES;
+    unsigned int chunkFrames = CHUNK_FRAMES;
 
     try {
         audio.openStream(
             &outParams, &inParams, RTAUDIO_FLOAT32,
-            sampleRate, &bufferFrames, &audioCallback
+            sampleRate, &chunkFrames, &audioCallback
         );
         audio.startStream();
     }

@@ -1,7 +1,7 @@
 #include "delayBuffer.h"
 #include <iostream>
 
-#define FRAMES 10
+#define FRAMES 5
 
 
 void print(float *in, float *out, unsigned int nFrames) {
@@ -18,30 +18,30 @@ void print(float *in, float *out, unsigned int nFrames) {
 }
 
 int main() {
-    DelayBuffer delayBuffer(30);
-    float in1[FRAMES] = {1,1,1,1,1,1,1,1,1,1};
-    float in2[FRAMES] = {2,2,2,2,2,2,2,2,2,2};
-    float in3[FRAMES] = {3,3,3,3,3,3,3,3,3,3};
-    float in4[FRAMES] = {4,4,4,4,4,4,4,4,4,4};
-    float out[FRAMES];
+    DelayBuffer delayBuffer(5, 3);
+    float in1[FRAMES*2] = {1,1,1,1,1,1,1,1,1,1};
+    float in2[FRAMES*2] = {2,2,2,2,2,2,2,2,2,2};
+    float in3[FRAMES*2] = {3,3,3,3,3,3,3,3,3,3};
+    float in4[FRAMES*2] = {4,4,4,4,4,4,4,4,4,4};
+    float out[FRAMES*2];
 
     delayBuffer.delay(out, in1, FRAMES);
-    print(in1, out, FRAMES);
+    print(in1, out, FRAMES*2);
     std::cout << "avg level: " << delayBuffer.getAvgLevel() << std::endl;
     delayBuffer.delay(out, in2, FRAMES);
-    print(in2, out, FRAMES);
+    print(in2, out, FRAMES*2);
     std::cout << "avg level: " << delayBuffer.getAvgLevel() << std::endl;
     delayBuffer.delay(out, in3, FRAMES);
-    print(in3, out, FRAMES);
+    print(in3, out, FRAMES*2);
     std::cout << "avg level: " << delayBuffer.getAvgLevel() << std::endl;
     delayBuffer.delay(out, in4, FRAMES);
-    print(in4, out, FRAMES);
+    print(in4, out, FRAMES*2);
     std::cout << "avg level: " << delayBuffer.getAvgLevel() << std::endl;
     delayBuffer.delay(out, in1, FRAMES);
-    print(in1, out, FRAMES);
+    print(in1, out, FRAMES*2);
     std::cout << "avg level: " << delayBuffer.getAvgLevel() << std::endl;
     delayBuffer.delay(out, in2, FRAMES);
-    print(in2, out, FRAMES);
+    print(in2, out, FRAMES*2);
     std::cout << "avg level: " << delayBuffer.getAvgLevel() << std::endl;
 
     return 0;
