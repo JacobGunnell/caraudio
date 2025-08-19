@@ -4,21 +4,25 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <fstream>
 #include <rtaudio/RtAudio.h>
 
 #include "config.h"
 #include "delayBuffer.h"
 
 
+typedef struct {
+    float minDynamic;
+    float dynamicRange;
+    float maxVolume;
+    float smoothing;
+} dspcfg_t;
+dspcfg_t dspCfg;
+
 // Level control
 void levelControl(float *samples, unsigned int nFrames, float level) {
-    const float minDynamic = 2e-2f;
-    const float dynamicRange = 0.5f;
-    const float maxVolume = 4.0f;
-    const float smoothing = 5e-3f;
     static float volume = 1.0f;
-
-    volume = std::min(minDynamic/level + dynamicRange, maxVolume) * smoothing + volume * (1.0f-smoothing);
+    volume = std::min(dspCfg.minDynamic/level + dspCfg.dynamicRange, dspCfg.maxVolume) * dspCfg.smoothing + volume * (1.0f-dspCfg.smoothing);
 
     for (unsigned int i = 0; i < nFrames * CHANNELS; ++i) {
         samples[i] *= volume;
@@ -48,6 +52,30 @@ void signalHandler(int) {
 }
 
 int main() {
+    // Read DSP config from file, if present
+    std::ifstream dspCfgFile("/home/pi/caraudio/dsp.cfg", std::ifstream::in);
+    if (dspCfgFile.is_open()) {
+        std::cout << "Reading DSP config from dsp.cfg" << std::endl;
+        dspCfgFile 
+            >> dspCfg.minDynamic 
+            >> dspCfg.dynamicRange 
+            >> dspCfg.maxVolume 
+            >> dspCfg.smoothing;
+    }
+    // If DSP config file is absent, use default values
+    else {
+        std::cout << "No dsp.cfg found, using defaults" << std::endl;
+        dspCfg = {
+            .minDynamic = 2e-2f,
+            .dynamicRange = 0.5f,
+            .maxVolume = 4.0f,
+            .smoothing = 5e-3f
+        };
+    }
+    dspCfgFile.close();
+
+    std::cout << "minDynamic = " << dspCfg.minDynamic << ", dynamicRange = " << dspCfg.dynamicRange << ", maxVolume = " << dspCfg.maxVolume << ", smoothing = " << dspCfg.smoothing << std::endl;
+
     RtAudio audio;
     if (audio.getDeviceCount() < 1) {
         std::cerr << "No audio devices found!" << std::endl;
