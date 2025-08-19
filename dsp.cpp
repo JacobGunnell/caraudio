@@ -6,24 +6,25 @@
 #include <chrono>
 #include <rtaudio/RtAudio.h>
 
-#define CHANNELS 2
+#include "config.h"
+#include "delayBuffer.h"
 
 
 // Level control
-void levelControl(float *samples, unsigned int nFrames) {
-    const float target = 2e-2f;
-    const float smoothing = 5e-6f;
-    const float maxVolume = 8.0f;
+void levelControl(float *samples, unsigned int nFrames, float level) {
+    const float minDynamic = 2e-2f;
+    const float dynamicRange = 0.5f;
+    const float maxVolume = 4.0f;
+    const float smoothing = 5e-3f;
     static float volume = 1.0f;
-    static float level = target;
+
+    volume = std::min(minDynamic/level + dynamicRange, maxVolume) * smoothing + volume * (1.0f-smoothing);
 
     for (unsigned int i = 0; i < nFrames * CHANNELS; ++i) {
-        level = smoothing*std::abs(samples[i]) + (1.0f-smoothing)*level;
-        volume = target / std::max(level, target/maxVolume); // don't let volume go above 10
         samples[i] *= volume;
     }
 
-    //std::cout << volume << "," << level << std::endl;
+    //std::cout << volume << std::endl;
 }
 
 int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nFrames, double /*streamTime*/, RtAudioStreamStatus status, void *userData) {
@@ -32,10 +33,11 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nFrames, d
     float *out = static_cast<float *>(outputBuffer);
     float *in = static_cast<float *>(inputBuffer);
 
-    std::copy(in, in + nFrames * CHANNELS, out);
+    static DelayBuffer delayBuffer(BUFFER_FRAMES*172); // 1 second lookahead window
+    delayBuffer.delay(out, in, nFrames);
 
     // DSP chain
-    levelControl(out, nFrames);
+    levelControl(out, nFrames, delayBuffer.getAvgLevel());
 
     return 0;
 }
@@ -80,8 +82,8 @@ int main() {
     outParams.deviceId = outputId; // USB DAC
     outParams.nChannels = CHANNELS;
 
-    unsigned int sampleRate = 44100;
-    unsigned int bufferFrames = 256;
+    unsigned int sampleRate = SAMPLE_HZ;
+    unsigned int bufferFrames = BUFFER_FRAMES;
 
     try {
         audio.openStream(
