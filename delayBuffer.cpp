@@ -50,16 +50,21 @@ void DelayBuffer::delay(float *out, float *in, unsigned int nFrames) {
     std::vector<float>::iterator begin = buffer.begin() + bufferIdx;
     std::vector<float>::iterator end = buffer.begin() + bufferIdx + nFrames*CHANNELS;
 
-    std::copy(begin, end, out);
-    std::copy(in, in + nFrames*CHANNELS, begin);
+    // Perform copying of chunks out of / into ringbuffer.
+    // This doesn't worry about wrapping around because buffer size is an integer multiple of chunk size.
+    std::copy(begin, end, out); // copy chunk at the current index to output
+    std::copy(in, in + nFrames*CHANNELS, begin); // overwrite current index with new input chunk
 
+    // Compute total of input chunk and retrieve total of output chunk.
     float outTotal = chunkSums[chunkSumsIdx];
     float inTotal = total(in, nFrames);
     chunkSums[chunkSumsIdx] = inTotal;
 
+    // Compute average level of chunks in the ringbuffer.
     avgWindowTotal += inTotal - outTotal;
     if (std::signbit(avgWindowTotal)) avgWindowTotal = 0.0f; // don't allow level to go negative
 
+    // Advance ringbuffer r/w indices appropriately.
     bufferIdx = (bufferIdx + chunkFrames*CHANNELS) % bufferSize;
     chunkSumsIdx = (chunkSumsIdx + 1) % avgWindowChunks;
 }
