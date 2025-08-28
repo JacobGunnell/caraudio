@@ -13,12 +13,15 @@
 * @param _sampleRate Sample rate in Hz (usually 44100)
 * @param _chunkFrames Number of frames per chunk (usually 256)
 * @param _delayInSeconds Desired delay in seconds
+* @param _avgWindowInSeconds Desired averaging window length in seconds
 *
 */
-DelayBuffer::DelayBuffer(unsigned int _sampleRate, unsigned int _chunkFrames, float _delayInSeconds)
-: DelayBuffer(_chunkFrames, std::floor(_delayInSeconds*_sampleRate/_chunkFrames)) {
+DelayBuffer::DelayBuffer(unsigned int _sampleRate, unsigned int _chunkFrames, float _delayInSeconds, float _avgWindowInSeconds)
+: DelayBuffer(_chunkFrames, std::floor(_delayInSeconds*_sampleRate/_chunkFrames), std::floor(_avgWindowInSeconds*_sampleRate/_chunkFrames)) {
     if (_delayInSeconds <= 0.0f)
         throw std::invalid_argument("Delay must be greater than 0.");
+    if (_avgWindowInSeconds <= 0.0f)
+        throw std::invalid_argument("Averaging window length must be greater than 0.");
 }
 
 /**
@@ -26,20 +29,21 @@ DelayBuffer::DelayBuffer(unsigned int _sampleRate, unsigned int _chunkFrames, fl
 *
 * @param _chunkFrames Number of frames per chunk (usually 256)
 * @param _bufferChunks Number of chunks to include in the buffer per channel (1 second delay = 44100/256 ~ 172)
+* @param _avgWindowChunks Number of chunks long to make the averaging window
 *
 */
-DelayBuffer::DelayBuffer(size_t _chunkFrames, size_t _bufferChunks) {
+DelayBuffer::DelayBuffer(size_t _chunkFrames, size_t _bufferChunks, size_t _avgWindowChunks) {
     bufferSize = _chunkFrames * _bufferChunks * CHANNELS; // total buffer size is frames per chunk times number of chunks
-    bufferChunks = _bufferChunks;
-    chunkFrames = _chunkFrames;
 
     buffer.reserve(bufferSize);
+    chunkFrames = _chunkFrames;
     bufferIdx = 0;
 
-    levels.reserve(bufferChunks); // used to store average level of each chunk to avoid recomputing
-    levelIdx = 0;
+    chunkSums.reserve(_avgWindowChunks); // used to store average level of each chunk to avoid recomputing
+    avgWindowChunks = _avgWindowChunks;
+    chunkSumsIdx = 0;
 
-    avgLevel = 0;
+    avgWindowTotal = 0;
 }
 
 void DelayBuffer::delay(float *out, float *in, unsigned int nFrames) {
@@ -49,15 +53,15 @@ void DelayBuffer::delay(float *out, float *in, unsigned int nFrames) {
     std::copy(begin, end, out);
     std::copy(in, in + nFrames*CHANNELS, begin);
 
-    float outTotal = levels[levelIdx];
+    float outTotal = chunkSums[chunkSumsIdx];
     float inTotal = total(in, nFrames);
-    levels[levelIdx] = inTotal;
+    chunkSums[chunkSumsIdx] = inTotal;
 
-    avgLevel += (inTotal - outTotal) / bufferSize;
-    if (std::signbit(avgLevel)) avgLevel = 0.0f; // don't allow level to go negative
+    avgWindowTotal += inTotal - outTotal;
+    if (std::signbit(avgWindowTotal)) avgWindowTotal = 0.0f; // don't allow level to go negative
 
     bufferIdx = (bufferIdx + chunkFrames*CHANNELS) % bufferSize;
-    levelIdx = (levelIdx + 1) % bufferChunks;
+    chunkSumsIdx = (chunkSumsIdx + 1) % avgWindowChunks;
 }
 
 float DelayBuffer::total(float *samples, unsigned int nFrames) {

@@ -16,19 +16,25 @@ typedef struct {
     float dynamicRange;
     float maxVolume;
     float smoothing;
+    float lookaheadDelay;
+    float averagingWindow;
+    float gateLevel;
 } dspcfg_t;
 dspcfg_t dspCfg;
 
 // Level control
-void levelControl(float *samples, unsigned int nFrames, float level) {
+void levelControl(float *samples, unsigned int nFrames, float avgLevel, bool isMusicPlaying) {
     static float volume = 1.0f;
-    volume = std::min(dspCfg.minDynamic/level + dspCfg.dynamicRange, dspCfg.maxVolume) * dspCfg.smoothing + volume * (1.0f-dspCfg.smoothing);
+    if (isMusicPlaying) // Ignore chunks that are below gate threshold. This prevents level control from turning up volume in between songs.
+        volume = std::min(dspCfg.minDynamic/avgLevel + dspCfg.dynamicRange, dspCfg.maxVolume) * dspCfg.smoothing + volume * (1.0f-dspCfg.smoothing);
+    else
+        volume = std::min(volume, 1.0f); // cap volume at 1 when music is stopped, in case user decides to play a loud song after a soft one
 
     for (unsigned int i = 0; i < nFrames * CHANNELS; ++i) {
         samples[i] *= volume;
     }
 
-    //std::cout << volume << std::endl;
+    //std::cout << volume << " " << isMusicPlaying << std::endl;
 }
 
 int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nFrames, double /*streamTime*/, RtAudioStreamStatus status, void *userData) {
@@ -37,11 +43,11 @@ int audioCallback(void *outputBuffer, void *inputBuffer, unsigned int nFrames, d
     float *out = static_cast<float *>(outputBuffer);
     float *in = static_cast<float *>(inputBuffer);
 
-    static DelayBuffer delayBuffer(SAMPLE_HZ, CHUNK_FRAMES, 1.0); // 1 second lookahead window
+    static DelayBuffer delayBuffer(SAMPLE_HZ, CHUNK_FRAMES, dspCfg.lookaheadDelay, dspCfg.averagingWindow); // 1 second lookahead window
     delayBuffer.delay(out, in, nFrames);
 
     // DSP chain
-    levelControl(out, nFrames, delayBuffer.getAvgLevel());
+    levelControl(out, nFrames, delayBuffer.getAvgLevel(), delayBuffer.isMusicPlaying(dspCfg.gateLevel));
 
     return 0;
 }
@@ -60,7 +66,10 @@ int main() {
             >> dspCfg.minDynamic 
             >> dspCfg.dynamicRange 
             >> dspCfg.maxVolume 
-            >> dspCfg.smoothing;
+            >> dspCfg.smoothing
+            >> dspCfg.lookaheadDelay
+            >> dspCfg.averagingWindow
+            >> dspCfg.gateLevel;
     }
     // If DSP config file is absent, use default values
     else {
@@ -69,12 +78,15 @@ int main() {
             .minDynamic = 2e-2f,
             .dynamicRange = 0.5f,
             .maxVolume = 4.0f,
-            .smoothing = 5e-3f
+            .smoothing = 5e-3f,
+            .lookaheadDelay = 1.0,
+            .averagingWindow = 1.0,
+            .gateLevel = 1e-4f
         };
     }
     dspCfgFile.close();
 
-    std::cout << "minDynamic = " << dspCfg.minDynamic << ", dynamicRange = " << dspCfg.dynamicRange << ", maxVolume = " << dspCfg.maxVolume << ", smoothing = " << dspCfg.smoothing << std::endl;
+    std::cout << "minDynamic = " << dspCfg.minDynamic << ", dynamicRange = " << dspCfg.dynamicRange << ", maxVolume = " << dspCfg.maxVolume << ", smoothing = " << dspCfg.smoothing << ", lookaheadDelay = " << dspCfg.lookaheadDelay << " s, averagingWindow = " << dspCfg.averagingWindow << " s, gateLevel = " << dspCfg.gateLevel << std::endl;
 
     RtAudio audio;
     if (audio.getDeviceCount() < 1) {
